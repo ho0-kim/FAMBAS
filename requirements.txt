@@ -1,0 +1,12 @@
+moviepy
+numpy
+opencv-python==4.10.0.84
+pillow
+SoccerNet
+timm
+torch
+torchvision
+tqdm
+wandb
+mmengine
+joblib
