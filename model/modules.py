@@ -6,6 +6,7 @@ File containing the different modules related to the model: T-DEED.
 import abc
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
 #Local imports
@@ -370,6 +371,114 @@ class FC2Layers(nn.Module):
         x = torch.cat([self._fc1(x), self._fc2(x)], dim = 2)
         return x
     
+
+class AffineDropPath(nn.Module):
+    """
+    Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks) with a per channel scaling factor (and zero init)
+    See: https://arxiv.org/pdf/2103.17239.pdf
+    """
+
+    def __init__(self, num_dim, drop_prob=0.0, init_scale_value=1e-4):
+        super().__init__()
+        self.scale = nn.Parameter(
+            init_scale_value * torch.ones((1, num_dim, 1)),
+            requires_grad=True
+        )
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        return drop_path(self.scale * x, self.drop_prob, self.training)
+    
+
+class MaxPooler(nn.Module):
+    def __init__(
+            self,
+            kernel_size,
+            stride,
+            padding,):
+        super().__init__()
+        self.ds_pooling = nn.MaxPool1d(
+            kernel_size, stride=stride, padding=padding)
+
+        self.stride = stride
+
+    def forward(self, x, mask, **kwargs):
+
+        # out, out_mask = self.channel_att(x, mask)
+
+        if self.stride > 1:
+            # downsample the mask using nearest neighbor
+            out_mask = F.interpolate(
+                mask.to(x.dtype), size=x.size(-1) // self.stride, mode='nearest')
+        else:
+            # masking out the features
+            out_mask = mask
+
+        out = self.ds_pooling(x) * out_mask.to(x.dtype)
+
+        return out, out_mask.bool()
+    
+    
+class MaskMambaBlock(nn.Module):
+    def __init__(
+        self,        
+        n_embd,                # dimension of the input features
+        kernel_size=4,         # conv kernel size
+        n_ds_stride=1,         # downsampling stride for the current layer
+        drop_path_rate=0.3,         # drop path rate
+        use_mamba_type="dbm"
+    ) -> None:
+        super().__init__()
+        if use_mamba_type == 'dbm':
+            self.mamba = DBM(n_embd, d_conv=kernel_size, use_fast_path=True, expand=1)
+        elif use_mamba_type == "vim":
+            # vim
+            self.mamba = ViM(n_embd, d_conv=kernel_size, bimamba_type="v2", use_fast_path=True)
+        else:
+            raise NotImplementedError
+        if n_ds_stride > 1:
+            self.downsample = MaxPooler(kernel_size=3, stride=2, padding=1)
+        else:
+            self.downsample = None
+            
+        
+        self.norm = nn.LayerNorm(n_embd)
+                
+        # drop path
+        if drop_path_rate > 0.0:
+            self.drop_path = AffineDropPath(n_embd, drop_prob=drop_path_rate)
+        else:
+            self.drop_path = nn.Identity()
+
+    def forward(self, x, mask):
+        res = x
+        x_ = x.transpose(1,2)
+        x_ = self.norm(x_)
+        x_ = self.mamba(x_).transpose(1, 2)
+        x = x_ * mask.to(x.dtype)
+
+        x  = res + self.drop_path(x)
+
+        if self.downsample is not None:
+            x, mask = self.downsample(x, mask)
+
+        return  x, mask
+    
+
+def drop_path(x, drop_prob=0.0, training=False):
+    """
+    Stochastic Depth per sample.
+    """
+    if drop_prob == 0.0 or not training:
+        return x
+    keep_prob = 1 - drop_prob
+    shape = (x.shape[0],) + (1,) * (
+        x.ndim - 1
+    )  # work with diff dim tensors, not just 2D ConvNets
+    mask = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
+    mask.floor_()  # binarize
+    output = x.div(keep_prob) * mask
+    return output
 
 def step(optimizer, scaler, loss, lr_scheduler=None, backward_only=False):
     if scaler is None:
