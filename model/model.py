@@ -15,7 +15,7 @@ import math
 
 
 #Local imports
-from model.modules import BaseRGBModel, EDSGPMIXERLayers, FCLayers, FC2Layers, step, process_prediction, process_predictionTeam, process_double_head
+from model.modules import BaseRGBModel, EDSGPMIXERLayers, MambaBackbone, FCLayers, FC2Layers, step, process_prediction, process_predictionTeam, process_double_head
 from model.shift import make_temporal_shift
 
 class TDEEDModel(BaseRGBModel):
@@ -28,7 +28,7 @@ class TDEEDModel(BaseRGBModel):
             assert self._modality == 'rgb', 'Only RGB supported for now'
             in_channels = {'rgb': 3}[self._modality]
             self._temp_arch = args.temporal_arch
-            assert self._temp_arch in ['ed_sgp_mixer'], 'Only ed_sgp_mixer supported for now'
+            assert self._temp_arch in ['ed_sgp_mixer', 'mamba'], 'Choose one in [ed_sgp_mixer, mamba]'
             self._radi_displacement = args.radi_displacement
             self._feature_arch = args.feature_arch
             assert 'rny' in self._feature_arch, 'Only rny supported for now'
@@ -67,6 +67,9 @@ class TDEEDModel(BaseRGBModel):
             
             if self._temp_arch == 'ed_sgp_mixer':
                 self._temp_fine = EDSGPMIXERLayers(feat_dim, args.clip_len, num_layers=args.n_layers, ks = args.sgp_ks, k = args.sgp_r, concat = True)
+                self._pred_fine = FCLayers(self._feat_dim, args.num_classes+1)
+            elif self._temp_arch == 'mamba':
+                self._temp_fine = MambaBackbone(feat_dim, n_embd=args.embd_dim, n_embd_ks=args.embd_ks, arch=args.arch, scale_factor=2, with_ln=args.embd_with_ln)
                 self._pred_fine = FCLayers(self._feat_dim, args.num_classes+1)
             else:
                 raise NotImplementedError(self._temp_arch)
@@ -133,10 +136,25 @@ class TDEEDModel(BaseRGBModel):
             #Temporal encoding
             im_feat = im_feat + self.temp_enc.expand(batch_size, -1, -1)
 
-            #Temporal module (SGP-Mixer)
+            #Temporal module (SGP-Mixer, Mamba)
             if self._temp_arch == 'ed_sgp_mixer':
                 output_data = {}
                 im_feat = self._temp_fine(im_feat)
+                if self._radi_displacement > 0:
+                    displ_feat = self._pred_displ(im_feat).squeeze(-1)
+                    output_data['displ_feat'] = displ_feat
+                if self._event_team:
+                    team_feat = self._pred_team(im_feat).squeeze(-1)
+                    output_data['team_feat'] = team_feat
+                im_feat = self._pred_fine(im_feat)
+
+                output_data['im_feat'] = im_feat
+
+                return output_data, y
+            
+            elif self._temp_arch == 'mamba':
+                output_data = {}
+                im_feat, _ = self._temp_fine(im_feat)
                 if self._radi_displacement > 0:
                     displ_feat = self._pred_displ(im_feat).squeeze(-1)
                     output_data['displ_feat'] = displ_feat
