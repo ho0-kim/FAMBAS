@@ -62,9 +62,15 @@ def update_args(args, config):
     args.warm_up_epochs = config['warm_up_epochs']
     args.start_val_epoch = config['start_val_epoch']
     args.temporal_arch = config['temporal_arch']
-    args.n_layers = config['n_layers']
-    args.sgp_ks = config['sgp_ks']
-    args.sgp_r = config['sgp_r']
+    if config['temporal_arch'] == 'ed_sgp_mixer':
+        args.n_layers = config['n_layers']
+        args.sgp_ks = config['sgp_ks']
+        args.sgp_r = config['sgp_r']
+    elif config['temporal_arch'] == 'mamba':
+        args.embd_dim = config['embd_dim']
+        args.embd_ks = config["embd_ks"]
+        args.embd_arch = config["embd_arch"]
+        args.embd_with_ln = config["embd_with_ln"],
     args.only_test = config['only_test']
     args.criterion = config['criterion']
     args.num_workers = config['num_workers']
