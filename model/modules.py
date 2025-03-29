@@ -10,6 +10,8 @@ import torch.nn.functional as F
 import math
 
 #Local imports
+from mamba_ssm.modules.mamba_simple import Mamba as ViM
+from mamba_ssm.modules.mamba_new import Mamba as DBM
 
 class ABCModel:
 
