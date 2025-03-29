@@ -69,7 +69,7 @@ class TDEEDModel(BaseRGBModel):
                 self._temp_fine = EDSGPMIXERLayers(feat_dim, args.clip_len, num_layers=args.n_layers, ks = args.sgp_ks, k = args.sgp_r, concat = True)
                 self._pred_fine = FCLayers(self._feat_dim, args.num_classes+1)
             elif self._temp_arch == 'mamba':
-                self._temp_fine = MambaBackbone(feat_dim, n_embd=args.embd_dim, n_embd_ks=args.embd_ks, arch=args.arch, scale_factor=2, with_ln=args.embd_with_ln)
+                self._temp_fine = MambaBackbone(feat_dim, n_embd=args.embd_dim, n_embd_ks=args.embd_ks, arch=args.embd_arch, scale_factor=2, with_ln=args.embd_with_ln)
                 self._pred_fine = FCLayers(self._feat_dim, args.num_classes+1)
             else:
                 raise NotImplementedError(self._temp_arch)
