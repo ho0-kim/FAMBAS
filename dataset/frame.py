@@ -228,7 +228,7 @@ class ActionSpotDataset(Dataset):
                     else:
                         labels_team[label['label_idx']] = (label['label']+1) % 2 # -1 if background, 0 if left, 1 if right
 
-        data = {'frame': frames, 'contains_event': int(np.sum(labels) > 0), 'label': labels, 'base_frame': base_frames}
+        data = {'frame': frames, 'contains_event': int(np.sum(labels) > 0), 'label': labels, 'base_frame': base_frames, 'pad_start': frames_path[2], 'pad_end': frames_path[3]}
 
         if self._radi_displacement > 0:
             labelsD = np.zeros(self._clip_len, np.int64)
