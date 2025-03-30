@@ -103,6 +103,7 @@ class ActionSpotDataset(Dataset):
     def _store_clips(self):
         #Initialize frame paths list
         self._frame_paths = []
+        self._base_frame_paths = []
         self._labels_store = []
         if self._radi_displacement > 0:
             self._labelsD_store = []
@@ -120,6 +121,7 @@ class ActionSpotDataset(Dataset):
             for base_idx in range(-self._pad_len * self._stride, max(0, video_len - 1 + (2 * self._pad_len - self._clip_len) * self._stride), self._overlap):
 
                 frames_paths = self._frame_reader.load_paths(video['video'], base_idx, base_idx + self._clip_len * self._stride, stride=self._stride)
+                base_frames_paths = self._frame_reader.load_paths(video['video'], 0, self._clip_len * self._stride, stride=self._stride)
 
                 labels = []
                 if self._radi_displacement > 0:
@@ -152,11 +154,13 @@ class ActionSpotDataset(Dataset):
                     if self._dataset == 'soccernet':
                         if len(labels) > 0:
                             self._frame_paths.append(frames_paths)
+                            self._base_frame_paths.append(base_frames_paths)
                             self._labels_store.append(labels)
                             if self._radi_displacement > 0:
                                 self._labelsD_store.append(labelsD)
                     else:
                         self._frame_paths.append(frames_paths)
+                        self._base_frame_paths.append(base_frames_paths)
                         self._labels_store.append(labels)
                         if self._radi_displacement > 0:
                             self._labelsD_store.append(labelsD)
@@ -169,6 +173,8 @@ class ActionSpotDataset(Dataset):
 
         with open(store_path + '/frame_paths.pkl', 'wb') as f:
             pickle.dump(self._frame_paths, f)
+        with open(store_path + '/base_frame_paths.pkl', 'wb') as f:
+            pickle.dump(self._base_frame_paths, f)
         with open(store_path + '/labels.pkl', 'wb') as f:
             pickle.dump(self._labels_store, f)
         if self._radi_displacement > 0:
@@ -182,6 +188,8 @@ class ActionSpotDataset(Dataset):
         
         with open(store_path + '/frame_paths.pkl', 'rb') as f:
             self._frame_paths = pickle.load(f)
+        with open(store_path + '/base_frame_paths.pkl', 'rb') as f:
+            self._base_frame_paths = pickle.load(f)
         with open(store_path + '/labels.pkl', 'rb') as f:
             self._labels_store = pickle.load(f)
         if self._radi_displacement > 0:
@@ -196,12 +204,14 @@ class ActionSpotDataset(Dataset):
 
         #Get frame_path and labels dict
         frames_path = self._frame_paths[idx]
+        base_frames_path = self._base_frame_paths[idx]
         dict_label = self._labels_store[idx]
         if self._radi_displacement > 0:
             dict_labelD = self._labelsD_store[idx]
 
         #Load frames
         frames = self._frame_reader.load_frames(frames_path, pad=True, stride=self._stride)
+        base_frames = self._frame_reader.load_frames(base_frames_path, pad=True, stride=self._stride)
 
         #Process labels
         labels = np.zeros(self._clip_len, np.int64)
@@ -218,7 +228,7 @@ class ActionSpotDataset(Dataset):
                     else:
                         labels_team[label['label_idx']] = (label['label']+1) % 2 # -1 if background, 0 if left, 1 if right
 
-        data = {'frame': frames, 'contains_event': int(np.sum(labels) > 0), 'label': labels}
+        data = {'frame': frames, 'contains_event': int(np.sum(labels) > 0), 'label': labels, 'base_frame': base_frames}
 
         if self._radi_displacement > 0:
             labelsD = np.zeros(self._clip_len, np.int64)
@@ -382,9 +392,12 @@ class ActionSpotVideoDataset(Dataset):
         frames = self._frame_reader.load_frames(
             video_name, start, start + self._clip_len * self._stride, pad=True,
             stride=self._stride)
+        base_frames = self._frame_reader.load_frames(
+            video_name, 0, self._clip_len * self._stride, pad=True,
+            stride=self._stride)
 
         return {'video': video_name, 'start': start // self._stride,
-                'frame': frames}
+                'frame': frames, 'base_frame': base_frames}
 
     def get_labels(self, video):
         meta = self._labels[self._video_idxs[video]]
