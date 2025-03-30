@@ -537,12 +537,12 @@ class MambaBackbone(nn.Module):
         n_in,               # input feature dimension
         n_embd,             # embedding dimension (after convolution)
         n_embd_ks,          # conv kernel size of the embedding network
-        arch = (2, 2, 5),   # (#convs, #stem convs, #branch convs)
+        arch = (2, 8),      # (#convs, #stem convs)
         scale_factor = 2,   # dowsampling rate for the branch
         with_ln=False,      # if to use layernorm
     ):
         super().__init__()
-        assert len(arch) == 3
+        assert len(arch) == 2
         self.arch = arch
         self.relu = nn.ReLU(inplace=True)
         self.scale_factor = scale_factor
@@ -572,11 +572,6 @@ class MambaBackbone(nn.Module):
         for idx in range(arch[1]):
             self.stem.append(MaskMambaBlock(n_embd))
 
-        # main branch using transformer with pooling
-        self.branch = nn.ModuleList()
-        for idx in range(arch[2]):
-            self.branch.append(MaskMambaBlock(n_embd, n_ds_stride=2))
-
         # init weights
         self.apply(self.__init_weights__)
 
@@ -602,21 +597,6 @@ class MambaBackbone(nn.Module):
             x, mask = self.stem[idx](x, mask)
 
         return x, mask
-
-        # prep for outputs
-        out_feats = tuple()
-        out_masks = tuple()
-        # 1x resolution
-        out_feats += (x, )
-        out_masks += (mask, )
-
-        # main branch with downsampling
-        for idx in range(len(self.branch)):
-            x, mask = self.branch[idx](x, mask)
-            out_feats += (x, )
-            out_masks += (mask, )
-
-        return out_feats, out_masks
 
 
 def drop_path(x, drop_prob=0.0, training=False):
