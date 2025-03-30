@@ -70,10 +70,7 @@ class TDEEDModel(BaseRGBModel):
                 self._pred_fine = FCLayers(self._feat_dim, args.num_classes+1)
             elif self._temp_arch == 'mamba':
                 self._temp_fine = MambaBackbone(feat_dim, n_embd=args.embd_dim, n_embd_ks=args.embd_ks, arch=args.embd_arch, scale_factor=2, with_ln=args.embd_with_ln)
-                self._neck = nn.ModuleList([
-                    nn.Dropout(),
-                    nn.Linear(args.embd_dim, self._feat_dim)
-                ])
+                self._neck = nn.Sequential(nn.Dropout(), nn.Linear(args.embd_dim, self._feat_dim))
                 self._pred_fine = FCLayers(self._feat_dim, args.num_classes+1)
             else:
                 raise NotImplementedError(self._temp_arch)
@@ -108,7 +105,7 @@ class TDEEDModel(BaseRGBModel):
                 self.cropT = torch.nn.Identity()
                 self.cropI = torch.nn.Identity()
 
-        def forward(self, x, pads, y = None, inference=False):
+        def forward(self, x, pads=None, y = None, inference=False):
             
             x = self.normalize(x) #Normalize to 0-1
             batch_size, clip_len, channels, height, width = x.shape
@@ -158,10 +155,10 @@ class TDEEDModel(BaseRGBModel):
             
             elif self._temp_arch == 'mamba':
                 output_data = {}
-                _, T, _ = im_feat.shape
-                mask = self.preprocess(pads, T)
+                B, T, _ = im_feat.shape
+                mask = self.preprocess(pads, B, T).to(im_feat.device)
                 im_feat = im_feat.permute(0, 2, 1)
-                im_feat, _ = self._temp_fine(im_feat)
+                im_feat, _ = self._temp_fine(im_feat, mask)
                 im_feat = im_feat.permute(0, 2, 1)
                 im_feat = self._neck(im_feat)
                 if self._radi_displacement > 0:
@@ -208,10 +205,13 @@ class TDEEDModel(BaseRGBModel):
             print('  Head:',
                 sum(p.numel() for p in self._pred_fine.parameters()))
             
-        def preprocess(self, pads, sequence_len):
-            mask = torch.zeros((len(pads[0]), 1, sequence_len), dtype=torch.bool, device=pads[0].device)
-            for b, pad in enumerate(zip(pads[0], pads[1])):
-                mask[b, 0, pad[0]:sequence_len-pad[1]] = True
+        def preprocess(self, pads, batch_size, sequence_len):
+            if pads:
+                mask = torch.zeros((batch_size, 1, sequence_len), dtype=torch.bool)
+                for b, pad in enumerate(zip(pads[0], pads[1])):
+                    mask[b, 0, pad[0]:sequence_len-pad[1]] = True
+            else:
+                mask = torch.ones((batch_size, 1, sequence_len), dtype=torch.bool)
             return mask
 
     def __init__(self, device='cuda', args=None):
@@ -250,7 +250,7 @@ class TDEEDModel(BaseRGBModel):
                 base_frame = batch['base_frame'].to(self.device).float()
                 label = batch['label']
                 label = label.to(self.device)
-                pads = (batch['pad_start'].to(self.device), batch['pad_end'].to(self.device))
+                pads = (batch['pad_start'], batch['pad_end'])
 
                 #update labels for double head
                 if self._model._double_head:
