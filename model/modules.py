@@ -452,12 +452,19 @@ class MaxPooler(nn.Module):
             self,
             kernel_size,
             stride,
-            padding,):
+            padding,
+            asym_pad=False, # asymmetric padding
+            ):
         super().__init__()
-        self.ds_pooling = nn.MaxPool1d(
-            kernel_size, stride=stride, padding=padding)
+        if not asym_pad:
+            self.ds_pooling = nn.MaxPool1d(
+                kernel_size, stride=stride, padding=padding)
+        else:
+            self.ds_pooling = nn.MaxPool1d(
+                kernel_size, stride=stride, padding=padding//2)
 
         self.stride = stride
+        self.asym_pad = asym_pad
 
     def forward(self, x, mask, **kwargs):
 
@@ -471,6 +478,8 @@ class MaxPooler(nn.Module):
             # masking out the features
             out_mask = mask
 
+        if self.asym_pad:
+            x = F.pad(x, (0, 1))
         out = self.ds_pooling(x) * out_mask.to(x.dtype)
 
         return out, out_mask.bool()
@@ -494,7 +503,7 @@ class MaskMambaBlock(nn.Module):
         else:
             raise NotImplementedError
         if n_ds_stride > 1:
-            self.downsample = MaxPooler(kernel_size=3, stride=2, padding=1)
+            self.downsample = MaxPooler(kernel_size=3, stride=2, padding=1, asym_pad=True)
         else:
             self.downsample = None
             
@@ -591,6 +600,8 @@ class MambaBackbone(nn.Module):
         # stem conv
         for idx in range(len(self.stem)):
             x, mask = self.stem[idx](x, mask)
+
+        return x, mask
 
         # prep for outputs
         out_feats = tuple()
