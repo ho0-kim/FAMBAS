@@ -397,20 +397,24 @@ class TDEEDModel(BaseRGBModel):
         
         return output
     
-    def predict(self, seq, use_amp=True):
+    def predict(self, seq, seq_b, use_amp=True):
         
         if not isinstance(seq, torch.Tensor):
             seq = torch.FloatTensor(seq)
+            seq_b = torch.FloatTensor(seq_b)
         if len(seq.shape) == 4: # (L, C, H, W)
             seq = seq.unsqueeze(0)
+            seq_b = seq_b.unsqueeze(0)
         if seq.device != self.device:
             seq = seq.to(self.device)
+            seq_b = seq_b.to(self.device)
         seq = seq.float()
+        seq_b = seq_b.float()
 
         self._model.eval()
         with torch.no_grad():
             with torch.amp.autocast("cuda") if use_amp else nullcontext():
-                predDict, _ = self._model(seq, inference=True)
+                predDict, _ = self._model(seq, seq_b, inference=True)
 
             pred = predDict['im_feat']
             if 'displ_feat' in predDict.keys():

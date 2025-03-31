@@ -93,7 +93,7 @@ def mAPevaluate(model, dataset, classes, printed=True, event_team = False, metri
         batch_size=batch_size
     )):
         
-        _, batch_pred_scores = model.predict(clip['frame'])
+        _, batch_pred_scores = model.predict(clip['frame'], clip['base_frame'])
 
         for i in range(clip['frame'].shape[0]):
             video = clip['video'][i]
@@ -191,7 +191,7 @@ def mAPevaluateTest(model, split, dataset, classes, printed=True, event_team = F
         batch_size=batch_size
     )):
         
-        _, batch_pred_scores = model.predict(clip['frame'])
+        _, batch_pred_scores = model.predict(clip['frame'], clip['base_frame'])
 
         for i in range(clip['frame'].shape[0]):
             video = clip['video'][i]
