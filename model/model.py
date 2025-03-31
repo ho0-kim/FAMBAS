@@ -105,7 +105,9 @@ class TDEEDModel(BaseRGBModel):
                 self.cropT = torch.nn.Identity()
                 self.cropI = torch.nn.Identity()
 
-        def forward(self, x, pads=None, y = None, inference=False):
+        def forward(self, x, x_b, pads=None, y = None, inference=False):
+            B, T, C, W, H = x.shape
+            x = torch.stack((x, x_b), dim=1).view(-1, T, C, W, H)
             
             x = self.normalize(x) #Normalize to 0-1
             batch_size, clip_len, channels, height, width = x.shape
@@ -140,7 +142,9 @@ class TDEEDModel(BaseRGBModel):
             #Temporal module (SGP-Mixer, Mamba)
             if self._temp_arch == 'ed_sgp_mixer':
                 output_data = {}
-                im_feat = self._temp_fine(im_feat)
+                _im_feat = self._temp_fine(im_feat)
+                im_feat = _im_feat[0::2]
+                base_feat = _im_feat[1::2]
                 if self._radi_displacement > 0:
                     displ_feat = self._pred_displ(im_feat).squeeze(-1)
                     output_data['displ_feat'] = displ_feat
@@ -160,7 +164,9 @@ class TDEEDModel(BaseRGBModel):
                 im_feat = im_feat.permute(0, 2, 1)
                 im_feat, _ = self._temp_fine(im_feat, mask)
                 im_feat = im_feat.permute(0, 2, 1)
-                im_feat = self._neck(im_feat)
+                _im_feat = self._neck(im_feat)
+                im_feat = _im_feat[0::2]
+                base_feat = _im_feat[1::2]
                 if self._radi_displacement > 0:
                     displ_feat = self._pred_displ(im_feat).squeeze(-1)
                     output_data['displ_feat'] = displ_feat
@@ -206,12 +212,11 @@ class TDEEDModel(BaseRGBModel):
                 sum(p.numel() for p in self._pred_fine.parameters()))
             
         def preprocess(self, pads, batch_size, sequence_len):
+            mask = torch.ones((batch_size, 1, sequence_len), dtype=torch.bool)
             if pads:
-                mask = torch.zeros((batch_size, 1, sequence_len), dtype=torch.bool)
                 for b, pad in enumerate(zip(pads[0], pads[1])):
-                    mask[b, 0, pad[0]:sequence_len-pad[1]] = True
-            else:
-                mask = torch.ones((batch_size, 1, sequence_len), dtype=torch.bool)
+                    if pad[0] > 0: mask[b*2, 0, :pad[0]] = False
+                    if pad[1] > 0: mask[b*2, 0, -pad[1]:] = False
             return mask
 
     def __init__(self, device='cuda', args=None):
@@ -265,6 +270,7 @@ class TDEEDModel(BaseRGBModel):
                 
                 if 'frame2' in batch.keys():
                     frame2 = batch['frame2'].to(self.device).float()
+                    base_frame2 = batch['base_frame2'].to(self.device).float()
                     label2 = batch['label2']
                     label2 = label2.to(self.device)
 
@@ -281,6 +287,7 @@ class TDEEDModel(BaseRGBModel):
 
                     for i in range(frame2.shape[0]):
                         frame[i] = l[i] * frame[i] + (1 - l[i]) * frame2[i]
+                        base_frame[i] = l[i] * base_frame[i] + (1 - l[i]) * base_frame2[i]
                         lbl1 = label[i]
                         lbl2 = label2[i]
 
@@ -307,7 +314,7 @@ class TDEEDModel(BaseRGBModel):
                     else label.view(-1, label.shape[-1])
 
                 with torch.amp.autocast("cuda"):
-                    predDict, y = self._model(frame, pads=pads, y = label, inference=inference)
+                    predDict, y = self._model(frame, base_frame, pads=pads, y = label, inference=inference)
 
                     pred = predDict['im_feat']
                     if 'displ_feat' in predDict.keys():

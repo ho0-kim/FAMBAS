@@ -249,6 +249,7 @@ class ActionSpotDataset(Dataset):
             mix = self._get_one()    # Sample another clip
             
             ret['frame2'] = mix['frame']
+            ret['base_frame2'] = mix['base_frame']
             ret['contains_event2'] = mix['contains_event']
             ret['label2'] = mix['label']
             if self._radi_displacement > 0:
