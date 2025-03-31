@@ -106,8 +106,8 @@ class TDEEDModel(BaseRGBModel):
                 self.cropI = torch.nn.Identity()
 
         def forward(self, x, x_b, pads=None, y = None, inference=False):
-            B, T, C, W, H = x.shape
-            x = torch.stack((x, x_b), dim=1).view(-1, T, C, W, H)
+            B, T, C, H, W = x.shape
+            x = torch.stack((x, x_b), dim=1).view(-1, T, C, H, W)
             
             x = self.normalize(x) #Normalize to 0-1
             batch_size, clip_len, channels, height, width = x.shape
@@ -149,7 +149,7 @@ class TDEEDModel(BaseRGBModel):
                     displ_feat = self._pred_displ(im_feat).squeeze(-1)
                     output_data['displ_feat'] = displ_feat
                 if self._event_team:
-                    team_feat = self._pred_team(im_feat).squeeze(-1)
+                    team_feat = self._pred_team(im_feat + base_feat).squeeze(-1)
                     output_data['team_feat'] = team_feat
                 im_feat = self._pred_fine(im_feat)
 
@@ -171,7 +171,7 @@ class TDEEDModel(BaseRGBModel):
                     displ_feat = self._pred_displ(im_feat).squeeze(-1)
                     output_data['displ_feat'] = displ_feat
                 if self._event_team:
-                    team_feat = self._pred_team(im_feat).squeeze(-1)
+                    team_feat = self._pred_team(im_feat + base_feat).squeeze(-1)
                     output_data['team_feat'] = team_feat
                 im_feat = self._pred_fine(im_feat)
 
