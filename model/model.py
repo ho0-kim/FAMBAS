@@ -15,7 +15,7 @@ import math
 
 
 #Local imports
-from model.modules import BaseRGBModel, EDSGPMIXERLayers, MambaBackbone, FCLayers, FC2Layers, step, process_prediction, process_predictionTeam, process_double_head
+from model.modules import BaseRGBModel, EDSGPMIXERLayers, MambaBackbone, FCLayers, FC2Layers, FCFCLayers, step, process_prediction, process_predictionTeam, process_double_head
 from model.shift import make_temporal_shift
 
 class TDEEDModel(BaseRGBModel):
@@ -79,7 +79,7 @@ class TDEEDModel(BaseRGBModel):
                 self._pred_displ = FCLayers(self._feat_dim, 1)
 
             if self._event_team:
-                self._pred_team = FCLayers(self._feat_dim, 1)
+                self._pred_team = FCFCLayers(self._feat_dim, 1)
             
             #Augmentations and crop
             self.augmentation = T.Compose([
@@ -140,47 +140,35 @@ class TDEEDModel(BaseRGBModel):
             im_feat = im_feat + self.temp_enc.expand(batch_size, -1, -1)
 
             #Temporal module (SGP-Mixer, Mamba)
+            if not self._temp_arch in ['ed_sgp_mixer', 'mamba']:
+                raise NotImplementedError(self._temp_arch)
+
+            output_data = {}
             if self._temp_arch == 'ed_sgp_mixer':
-                output_data = {}
                 _im_feat = self._temp_fine(im_feat)
-                im_feat = _im_feat[0::2]
-                base_feat = _im_feat[1::2]
-                if self._radi_displacement > 0:
-                    displ_feat = self._pred_displ(im_feat).squeeze(-1)
-                    output_data['displ_feat'] = displ_feat
-                if self._event_team:
-                    team_feat = self._pred_team(im_feat + base_feat).squeeze(-1)
-                    output_data['team_feat'] = team_feat
-                im_feat = self._pred_fine(im_feat)
-
-                output_data['im_feat'] = im_feat
-
-                return output_data, y
             
             elif self._temp_arch == 'mamba':
-                output_data = {}
                 B, T, _ = im_feat.shape
                 mask = self.preprocess(pads, B, T).to(im_feat.device)
                 im_feat = im_feat.permute(0, 2, 1)
                 im_feat, _ = self._temp_fine(im_feat, mask)
                 im_feat = im_feat.permute(0, 2, 1)
                 _im_feat = self._neck(im_feat)
-                im_feat = _im_feat[0::2]
-                base_feat = _im_feat[1::2]
-                if self._radi_displacement > 0:
-                    displ_feat = self._pred_displ(im_feat).squeeze(-1)
-                    output_data['displ_feat'] = displ_feat
-                if self._event_team:
-                    team_feat = self._pred_team(im_feat + base_feat).squeeze(-1)
-                    output_data['team_feat'] = team_feat
-                im_feat = self._pred_fine(im_feat)
 
-                output_data['im_feat'] = im_feat
+            im_feat = _im_feat[0::2]
+            base_feat = _im_feat[1::2]
 
-                return output_data, y
-            
-            else:
-                raise NotImplementedError(self._temp_arch)
+            if self._radi_displacement > 0:
+                displ_feat = self._pred_displ(im_feat).squeeze(-1)
+                output_data['displ_feat'] = displ_feat
+            if self._event_team:
+                team_feat = self._pred_team(torch.cat([im_feat, base_feat], dim=-1)).squeeze(-1)
+                output_data['team_feat'] = team_feat
+            im_feat = self._pred_fine(im_feat)
+
+            output_data['im_feat'] = im_feat
+
+            return output_data, y
         
         def normalize(self, x):
             return x / 255.

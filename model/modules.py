@@ -373,6 +373,22 @@ class FC2Layers(nn.Module):
         x = torch.cat([self._fc1(x), self._fc2(x)], dim = 2)
         return x
     
+class FCFCLayers(nn.Module):
+
+    def __init__(self, feat_dim, num_classes):
+        super().__init__()
+        self._fc_in = nn.Linear(feat_dim, feat_dim//2)
+        self._fc_out = nn.Linear(feat_dim//2, num_classes)
+        self.dropout = nn.Dropout()
+
+    def forward(self, x):
+        batch_size, clip_len, _ = x.shape
+        x = self.dropout(x).reshape(batch_size * clip_len, -1)
+        x = self._fc_in(x)
+        x = self.dropout(x)
+        x = self._fc_out(x)
+        return x.view(batch_size, clip_len, -1)
+    
 
 class MaskedConv1D(nn.Module):
     """
