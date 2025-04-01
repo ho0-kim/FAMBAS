@@ -1,8 +1,8 @@
-#### *Do you like Gambas? This is FAMBAS! 🦐⚽*
+#### *¿Te gustan las Gambas? ¡Esto es FAMBAS! 🦐⚽*
 
 # FAMBAS (Football mAMba for Ball Action Spotting)
 
-FAMBAS is a video understanding model for Football Action Spotting. Detect and analyze ball actions in football (soccer) matches using Mamba architecture. This project is a part of SoccerNet Challenge 2025.
+FAMBAS is a video understanding model for Football Action Spotting. Detect and analyze ball actions in football (soccer) matches using Mamba architecture. This project is a part of [SoccerNet Challenge 2025](https://www.soccer-net.org/challenges/2025).
 
 ## Installation
 
