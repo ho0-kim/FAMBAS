@@ -26,7 +26,7 @@ from dataset.frame import ActionSpotVideoDataset
 
 
 #Constants
-EVAL_SPLITS = ['test', 'challenge']
+EVAL_SPLITS = ['challenge']
 STRIDE = 1
 STRIDE_SN = 12
 STRIDE_SNB = 2

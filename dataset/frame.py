@@ -567,3 +567,29 @@ class ActionSpotDatasetJoint(Dataset):
 
     def __len__(self):
         return self._dataset1.__len__() + self._dataset2.__len__()
+    
+class ActionSpotAllDatasetCombine(Dataset):
+    def __init__(
+            self,
+            dataset1, # train
+            dataset2, # val
+            dataset3 # test
+    ):
+        self._dataset1 = dataset1
+        self._dataset2 = dataset2
+        self._dataset3 = dataset3
+
+        self._radi_displacement = self._dataset1._radi_displacement
+        self._event_team = self._dataset1._event_team
+
+    def __getitem__(self, unused):
+
+        if random.random() < 0.6:
+            return self._dataset1.__getitem__(unused)
+        elif random.random() < 0.8:
+            return self._dataset2.__getitem__(unused)
+        else:
+            return self._dataset3.__getitem__(unused)
+        
+    def __len__(self):
+        return self._dataset1.__len__() + self._dataset2.__len__() +self._dataset3.__len__()

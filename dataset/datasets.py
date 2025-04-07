@@ -7,7 +7,7 @@ import os
 
 #Local imports
 from util.dataset import load_classes
-from dataset.frame import ActionSpotDataset, ActionSpotVideoDataset, ActionSpotDatasetJoint
+from dataset.frame import ActionSpotDataset, ActionSpotVideoDataset, ActionSpotDatasetJoint, ActionSpotAllDatasetCombine
 
 #Constants
 STRIDE = 1
@@ -45,13 +45,19 @@ def get_datasets(args):
         args.modality, args.clip_len, dataset_len, **dataset_kwargs)
     train_data.print_info()
         
-    dataset_kwargs['mixup'] = False # Disable mixup for validation
+    # dataset_kwargs['mixup'] = False # Disable mixup for validation
 
     val_data = ActionSpotDataset(
         classes, os.path.join('data', args.dataset, 'val.json'),
         args.frame_dir, args.store_dir, args.store_mode,
         args.modality, args.clip_len, dataset_len // 4, **dataset_kwargs)
     val_data.print_info()
+
+    test_data = ActionSpotDataset(
+        classes, os.path.join('data', args.dataset, 'test.json'),
+        args.frame_dir, args.store_dir, args.store_mode,
+        args.modality, args.clip_len, dataset_len // 4, **dataset_kwargs)
+    test_data.print_info()
 
     val_data_frames = None
     if args.criterion == 'map':
@@ -88,7 +94,7 @@ def get_datasets(args):
             args.modality, args.clip_len, dataset_len, **dataset_joint_train_kwargs)
         joint_train_train_data.print_info()
 
-        dataset_joint_train_kwargs['mixup'] = False # Disable mixup for validation
+        # dataset_joint_train_kwargs['mixup'] = False # Disable mixup for validation
 
         joint_train_val_data = ActionSpotDataset(
             joint_train_classes, os.path.join('data', args.joint_train['dataset'], 'val.json'),
@@ -96,7 +102,16 @@ def get_datasets(args):
             args.modality, args.clip_len, dataset_len // 4, **dataset_joint_train_kwargs)
         joint_train_val_data.print_info()
 
+        joint_train_test_data = ActionSpotDataset(
+            joint_train_classes, os.path.join('data', args.joint_train['dataset'], 'test.json'),
+            args.joint_train['frame_dir'], args.joint_train['store_dir'], args.store_mode,
+            args.modality, args.clip_len, dataset_len, **dataset_joint_train_kwargs)
+        joint_train_test_data.print_info()
+
         train_data = ActionSpotDatasetJoint(train_data, joint_train_train_data)
         val_data = ActionSpotDatasetJoint(val_data, joint_train_val_data)
+        test_data = ActionSpotDatasetJoint(test_data, joint_train_test_data)
+
+        train_data = ActionSpotAllDatasetCombine(train_data, val_data, test_data)
         
     return classes, joint_train_classes, train_data, val_data, val_data_frames
