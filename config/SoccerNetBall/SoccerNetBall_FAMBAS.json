@@ -23,7 +23,7 @@
     "sgp_r": 4,
     "embd_dim": 512,
     "embd_ks": 3,
-    "embd_arch": [2, 8],
+    "embd_arch": [2, 16],
     "embd_with_ln": true,
     "only_test": false,
     "criterion": "map",
