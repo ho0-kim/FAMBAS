@@ -49,10 +49,14 @@ class BaseRGBModel(ABCModel):
     def state_dict(self):
         if isinstance(self._model, nn.DataParallel):
             return self._model.module.state_dict()
+        if isinstance(self._model, nn.parallel.DistributedDataParallel):
+            return self._model.module.state_dict()
         return self._model.state_dict()
 
     def load(self, state_dict):
         if isinstance(self._model, nn.DataParallel):
+            self._model.module.load_state_dict(state_dict)
+        if isinstance(self._model, nn.parallel.DistributedDataParallel):
             self._model.module.load_state_dict(state_dict)
         else:
             self._model.load_state_dict(state_dict)
