@@ -56,7 +56,7 @@ class BaseRGBModel(ABCModel):
     def load(self, state_dict):
         if isinstance(self._model, nn.DataParallel):
             self._model.module.load_state_dict(state_dict)
-        if isinstance(self._model, nn.parallel.DistributedDataParallel):
+        elif isinstance(self._model, nn.parallel.DistributedDataParallel):
             self._model.module.load_state_dict(state_dict)
         else:
             self._model.load_state_dict(state_dict)

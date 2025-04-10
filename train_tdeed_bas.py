@@ -11,6 +11,10 @@ import torch
 import numpy as np
 import random
 from torch.utils.data import DataLoader
+import torch.multiprocessing as mp
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 import wandb
 import sys
 
@@ -91,13 +95,72 @@ def get_lr_scheduler(args, optimizer, num_steps_per_epoch):
         CosineAnnealingLR(optimizer,
             num_steps_per_epoch * cosine_epochs)])
 
+def ddp_setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    torch.cuda.set_device(rank)
+    init_process_group("nccl", rank=rank, world_size=world_size)
+
+
+def train(rank, world_size, args):
+    print(f"training process #{rank}")
+    ddp_setup(rank, world_size)
+
+    #Set seed
+    torch.manual_seed(args.seed+rank)
+    np.random.seed(args.seed+rank)
+    random.seed(args.seed+rank)
+
+    # Get datasets train, validation (and validation for map -> Video dataset)
+    classes, joint_train_classes, train_data, val_data, val_data_frames = get_datasets(args)
+    print('Datasets have been loaded from previous versions correctly!')
+
+    def worker_init_fn(id):
+        random.seed(rank + id + epoch * 100)
+    loader_batch_size = args.batch_size // args.acc_grad_iter
+
+    # Dataloaders
+    train_loader = DataLoader(
+        train_data, shuffle=False, batch_size=loader_batch_size,
+        pin_memory=True, num_workers=args.num_workers,
+        prefetch_factor=2, worker_init_fn=worker_init_fn,
+        sampler=DistributedSampler(train_data))
+        
+    val_loader = DataLoader(
+        val_data, shuffle=False, batch_size=loader_batch_size,
+        pin_memory=True, num_workers=args.num_workers,
+        prefetch_factor=2, worker_init_fn=worker_init_fn,
+        sampler=DistributedSampler(val_data))
+    
+    # Model
+    model = TDEEDModel(args=args)
+    # DistributedDataParallel
+    model = DDP(model.to(rank), device_ids=[rank])
+
+    #If joint_train -> 2 prediction heads
+    if args.joint_train != None:
+        if args.event_team:
+            n_classes = [len(classes)//2+1, len(joint_train_classes)//2+1]
+        else:
+            n_classes = [len(classes)+1, len(joint_train_classes)+1]
+        model._model.update_pred_head(n_classes)
+        model._num_classes = np.array(n_classes).sum() 
+
+    optimizer, scaler = model.get_optimizer({'lr': args.learning_rate})
+
+    # Warmup schedule
+    num_steps_per_epoch = len(train_loader) // args.acc_grad_iter
+    num_epochs, lr_scheduler = get_lr_scheduler(
+        args, optimizer, num_steps_per_epoch)
+    
+    losses = []
+    best_criterion = 0 if args.criterion == 'map' else float('inf')
+    epoch = 0
+    
+    destroy_process_group()
+
 
 def main(args):
-    #Set seed
-    print('Setting seed to: ', args.seed)
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
 
     config_path = args.model.split('_')[0] + '/' + args.model + '.json'
     config = load_json(os.path.join('config', config_path))
@@ -120,14 +183,17 @@ def main(args):
         os.makedirs(args.save_dir + '/wandb_logs', exist_ok=True)
     wandb.init(config = args, dir = args.save_dir + '/wandb_logs', project = 'TDEED-snbas2025', name = args.model + '-' + str(args.seed))
 
-    # Get datasets train, validation (and validation for map -> Video dataset)
-    classes, joint_train_classes, train_data, val_data, val_data_frames = get_datasets(args)
-
     if args.store_mode == 'store':
+        # Get datasets train, validation (and validation for map -> Video dataset)
+        classes, joint_train_classes, train_data, val_data, val_data_frames = get_datasets(args)
         print('Datasets have been stored correctly! Stop training here and rerun.')
         sys.exit('Datasets have correctly been stored! Stop training here and rerun with load mode.')
-    else:
-        print('Datasets have been loaded from previous versions correctly!')
+
+    # Set multi-gpu training
+    world_size = torch.cuda.device_count()
+    # Spawn training processes
+    mp.spawn(train, args=(world_size, args), nprocs=world_size)
+    return
 
     def worker_init_fn(id):
         random.seed(id + epoch * 100)
