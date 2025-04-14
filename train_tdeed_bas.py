@@ -133,9 +133,9 @@ def train(rank, world_size, args):
         sampler=DistributedSampler(val_data))
     
     # Model
-    model = TDEEDModel(args=args)
+    model = TDEEDModel(device=rank, args=args)
     # DistributedDataParallel
-    model = DDP(model.to(rank), device_ids=[rank])
+    model._model = DDP(model._model.to(rank), device_ids=[rank])
 
     #If joint_train -> 2 prediction heads
     if args.joint_train != None:
@@ -143,7 +143,7 @@ def train(rank, world_size, args):
             n_classes = [len(classes)//2+1, len(joint_train_classes)//2+1]
         else:
             n_classes = [len(classes)+1, len(joint_train_classes)+1]
-        model._model.update_pred_head(n_classes)
+        model._model.module.update_pred_head(n_classes)
         model._num_classes = np.array(n_classes).sum() 
 
     optimizer, scaler = model.get_optimizer({'lr': args.learning_rate})
