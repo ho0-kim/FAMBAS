@@ -12,6 +12,7 @@ from tqdm import tqdm
 import random
 import torch.nn.functional as F
 import math
+import torch.distributed as dist
 
 
 #Local imports
@@ -238,7 +239,7 @@ class TDEEDModel(BaseRGBModel):
         if loader.dataset._event_team:
             epoch_lossT = 0.
         with torch.no_grad() if optimizer is None else nullcontext():
-            for batch_idx, batch in enumerate(tqdm(loader)):
+            for batch_idx, batch in enumerate(get_progress_bar(loader)):
                 frame = batch['frame'].to(self.device).float()
                 base_frame = batch['base_frame'].to(self.device).float()
                 label = batch['label']
@@ -431,3 +432,11 @@ def get_model(model):
     if hasattr(model, 'module'):
         return model.module
     return model
+
+def get_progress_bar(iterable, desc=None, total=None):
+    # Only create a progress bar for the main process (rank 0)
+    if not dist.is_initialized() or dist.get_rank() == 0:
+        return tqdm(iterable, desc=desc, total=total)
+    else:
+        # Return a simple iterator for other processes
+        return iterable
