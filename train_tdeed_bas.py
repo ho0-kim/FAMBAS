@@ -115,22 +115,18 @@ def train(rank, world_size, args):
     classes, joint_train_classes, train_data, val_data, val_data_frames = get_datasets(args)
     print('Datasets have been loaded from previous versions correctly!')
 
-    def worker_init_fn(id):
-        random.seed(rank + id + epoch * 100)
     loader_batch_size = args.batch_size // args.acc_grad_iter
 
     # Dataloaders
     train_loader = DataLoader(
         train_data, shuffle=False, batch_size=loader_batch_size,
         pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=2, worker_init_fn=worker_init_fn,
-        sampler=DistributedSampler(train_data))
+        prefetch_factor=2, sampler=DistributedSampler(train_data))
         
     val_loader = DataLoader(
         val_data, shuffle=False, batch_size=loader_batch_size,
         pin_memory=True, num_workers=args.num_workers,
-        prefetch_factor=2, worker_init_fn=worker_init_fn,
-        sampler=DistributedSampler(val_data))
+        prefetch_factor=2, sampler=DistributedSampler(val_data))
     
     # Model
     model = TDEEDModel(device=rank, args=args)
