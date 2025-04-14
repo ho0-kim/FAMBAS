@@ -17,6 +17,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 import wandb
 import sys
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 #Local imports
@@ -131,7 +133,9 @@ def train(rank, world_size, args):
     # Model
     model = TDEEDModel(device=rank, args=args)
     # DistributedDataParallel
-    model._model = DDP(model._model.to(rank), device_ids=[rank])
+    model._model = DDP(model._model.to(rank), 
+                       device_ids=[rank], 
+                       find_unused_parameters=True)
 
     #If joint_train -> 2 prediction heads
     if args.joint_train != None:

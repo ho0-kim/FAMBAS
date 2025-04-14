@@ -79,7 +79,7 @@ class TDEEDModel(BaseRGBModel):
                 self._pred_displ = FCLayers(self._feat_dim, 1)
 
             if self._event_team:
-                self._pred_team = FCFCLayers(self._feat_dim, 1)
+                self._pred_team = FCFCLayers(self._feat_dim * 2, 1)
             
             #Augmentations and crop
             self.augmentation = T.Compose([
