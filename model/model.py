@@ -246,7 +246,7 @@ class TDEEDModel(BaseRGBModel):
                 pads = (batch['pad_start'], batch['pad_end'])
 
                 #update labels for double head
-                if self._model._double_head:
+                if get_model(self._model)._double_head:
                     batch_dataset = batch['dataset']
                     label = update_labels_2heads(label, batch_dataset, self._args.num_classes)
 
@@ -312,7 +312,7 @@ class TDEEDModel(BaseRGBModel):
 
                     loss = 0.
                     lossC = 0.
-                    if self._model._double_head:
+                    if get_model(self._model)._double_head:
                         b, t, c = pred.shape
 
                         if len(label.shape) == 2:
@@ -407,7 +407,7 @@ class TDEEDModel(BaseRGBModel):
             pred = predDict['im_feat']
             if 'displ_feat' in predDict.keys():
                 predD = predDict['displ_feat']
-                if self._model._double_head:
+                if get_model(self._model)._double_head:
                     pred = process_double_head(pred, predD, num_classes = self._args.num_classes+1)
                 else:
                     pred = process_prediction(pred, predD)
@@ -425,3 +425,9 @@ def update_labels_2heads(labels, datasets, num_classes1 = 1):
             labels[i] = labels[i] + num_classes1 + 1
 
     return labels
+
+def get_model(model):
+    """Helper function to consistently access model methods/attributes"""
+    if hasattr(model, 'module'):
+        return model.module
+    return model

@@ -156,6 +156,19 @@ def train(rank, world_size, args):
     losses = []
     best_criterion = 0 if args.criterion == 'map' else float('inf')
     epoch = 0
+
+    print('START TRAINING EPOCHS')
+    for epoch in range(epoch, num_epochs):
+
+        time_train0 = time.time()
+        train_losses = model.epoch(
+            train_loader, optimizer, scaler,
+            lr_scheduler=lr_scheduler, acc_grad_iter=args.acc_grad_iter)
+        train_loss = train_losses['loss']
+        time_train1 = time.time()
+        time_train = time_train1 - time_train0
+        break
+    print('Works!')
     
     destroy_process_group()
 
