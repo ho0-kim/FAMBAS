@@ -4,6 +4,8 @@
 
 FAMBAS is a video understanding model for Football Action Spotting. Detect and analyze ball actions in football (soccer) matches using Mamba architecture. This project is a part of [SoccerNet Challenge 2025](https://www.soccer-net.org/challenges/2025).
 
+![Architecture](imgs/FAMBAS_screenshot.png)
+
 ## Installation
 
 ```bash
